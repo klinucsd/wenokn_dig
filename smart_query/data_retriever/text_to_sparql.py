@@ -1,6 +1,6 @@
 import time
 import re
-import sys                                                                                                                                                        
+import sys
 import json
 import requests
 import chromadb
@@ -14,7 +14,7 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from groq import Groq
 from datetime import datetime
 from openai import OpenAI
-from datetime import datetime 
+from datetime import datetime
 
 load_dotenv()
 
@@ -28,16 +28,16 @@ n_results = 10
 
 # get relevant concepts for the request
 def get_relevant_concepts(query_text):
-    n_results=20
+    n_results = 20
     results = collection.query(
-        query_embeddings = [ embed_model.get_text_embedding(query_text) ],
-        n_results=n_results
+        query_embeddings=[embed_model.get_text_embedding(query_text)],
+        n_results=n_results,
     )
 
-    ids = results['ids'][0]
-    documents = results['documents'][0]
-    metadatas = results['metadatas'][0]
-    distances = results['distances'][0]
+    ids = results["ids"][0]
+    documents = results["documents"][0]
+    metadatas = results["metadatas"][0]
+    distances = results["distances"][0]
 
     return documents, metadatas
 
@@ -46,9 +46,9 @@ def get_relevant_concepts(query_text):
 def get_description(concepts, metadatas, documents):
     description = ""
     for i in range(len(concepts)):
-        if concepts[i]['is_relevant']:
-            try: 
-                index = documents.index(concepts[i]['entity'])
+        if concepts[i]["is_relevant"]:
+            try:
+                index = documents.index(concepts[i]["entity"])
                 description = f"""{description}
                
 { metadatas[index]['def'] }
@@ -59,10 +59,10 @@ def get_description(concepts, metadatas, documents):
     return description
 
 
-# create the sparql query request  
+# create the sparql query request
 def sparql_request(query_text, description):
 
-    example = '''
+    example = """
 
 # Must include the following PREFIX
 PREFIX schema: <https://schema.org/>  
@@ -89,9 +89,9 @@ WHERE {
   # Filter buildings within 5 miles (1 mile = 1609.34 meters)
   FILTER(?distanceInMeters <= 5 * 1609.34)
 } LIMIT 10
-    '''
+    """
 
-    example2 = '''
+    example2 = """
 
 PREFIX schema: <https://schema.org/>                                        
 PREFIX geo: <http://www.opengis.net/ont/geosparql#>                          
@@ -132,8 +132,7 @@ SELECT ?buildingName ?buildingGeometry ?buildingFIPS {
 }                                                                                                                                                                             
 LIMIT 10    
 
-'''
-
+"""
 
     return f"""
 
@@ -227,7 +226,6 @@ Do not include duplicate PREFIX.
     """
 
 
-
 safe = [
     {
         "category": "HARM_CATEGORY_HARASSMENT",
@@ -250,12 +248,12 @@ safe = [
 
 genai.configure(api_key=os.getenv("GOOGLE_AI_KEY"))
 
-model = genai.GenerativeModel('models/gemini-2.0-flash')
+model = genai.GenerativeModel("models/gemini-2.0-flash")
 
 
 def extract_code_blocks(text):
     # Define the pattern to match text between ```
-    pattern = r'```([\s\S]*?)```'
+    pattern = r"```([\s\S]*?)```"
     # Use re.findall to find all matches
     code_blocks = re.findall(pattern, text)
     return code_blocks
@@ -264,10 +262,10 @@ def extract_code_blocks(text):
 # Initialize a counter to keep track of the last used token
 counter = 0
 tokens = [
-   "gsk_w",
-   "gsk_T",
-   "gsk_U",
-]  
+    "gsk_w",
+    "gsk_T",
+    "gsk_U",
+]
 
 
 def get_candidate_concepts(query_text: str):
@@ -315,7 +313,11 @@ a string field "entity" and a boolean field "is_relevant".
     # print(response.text)
 
     response_text = response.text
-    if response_text.startswith('```json') or response_text.startswith('```JSON') or response_text.startswith('```'):
+    if (
+        response_text.startswith("```json")
+        or response_text.startswith("```JSON")
+        or response_text.startswith("```")
+    ):
         json_part = response_text.split("\n", 1)[1].rsplit("\n", 1)[0]
         concepts = json.loads(json_part)
     else:
@@ -331,31 +333,30 @@ a string field "entity" and a boolean field "is_relevant".
 
     client2 = OpenAI(api_key=os.getenv("OPENAI_KEY"))
     chat_completion2 = client2.chat.completions.create(
-    	model="gpt-4o", 
-        messages=[{"role": "user", "content": request_to_sparql}]
+        model="gpt-4o", messages=[{"role": "user", "content": request_to_sparql}]
     )
-    result = chat_completion2.choices[0].message.content    
+    result = chat_completion2.choices[0].message.content
 
     try:
         result = extract_code_blocks(result)[0]
     except:
         pass
- 
-    if result.startswith('sparql'):
+
+    if result.startswith("sparql"):
         result = result[6:]
 
-    old_substring = '\\\\'	
-    new_substring = '\\'
+    old_substring = "\\\\"
+    new_substring = "\\"
     result = result.replace(old_substring, new_substring)
 
     result = result.replace(
         'BIND(REPLACE(?string, "^.*\\(\\(.*\\)* \\((.*)\\)\\)$", "$1") AS ?substring) .',
-        'BIND(REPLACE(?string, "^.*\\\\(\\\\(.*\\\\)* \\\\((.*)\\\\)\\\\)$", "$1") AS ?substring) .'
+        'BIND(REPLACE(?string, "^.*\\\\(\\\\(.*\\\\)* \\\\((.*)\\\\)\\\\)$", "$1") AS ?substring) .',
     )
 
     result = result.replace(
-        'BIND(REPLACE(?string, "^.*\\(\\(.*\\)*, \\((.*)\\)\\)$", "$1") AS ?substring)', 
-        'BIND(REPLACE(?string, "^.*\\\\(\\\\(.*\\\\)*, \\\\((.*)\\\\)\\\\)$", "$1") AS ?substring)'
+        'BIND(REPLACE(?string, "^.*\\(\\(.*\\)*, \\((.*)\\)\\)$", "$1") AS ?substring)',
+        'BIND(REPLACE(?string, "^.*\\\\(\\\\(.*\\\\)*, \\\\((.*)\\\\)\\\\)$", "$1") AS ?substring)',
     )
 
     return result
